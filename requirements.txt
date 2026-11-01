@@ -1,0 +1,7 @@
+cadquery==2.5.2
+mujoco==3.2.7
+numpy==2.2.6
+trimesh==5.1.1
+Pillow==12.3.0
+imageio==2.38.0
+imageio-ffmpeg==0.6.0

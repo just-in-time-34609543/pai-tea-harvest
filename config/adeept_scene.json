@@ -1,0 +1,122 @@
+{
+  "revision": "adeept-urlab-v0",
+  "note": "Scaled-up greenhouse so the Adeept desktop arm fits; arm MJCF is adeept_sim/adeept_arm.xml.",
+  "greenhouse": {
+    "length_mm": 900,
+    "width_mm": 600,
+    "height_mm": 480,
+    "x_min_mm": -450,
+    "eave_mm": 220,
+    "tube_radius_mm": 4
+  },
+  "bench": {
+    "size_mm": [
+      700,
+      380,
+      40
+    ],
+    "pos_mm": [
+      0,
+      30,
+      0
+    ]
+  },
+  "arm_base_mm": [
+    0,
+    -60,
+    40
+  ],
+  "plants": {
+    "centers_mm": [
+      [
+        -110,
+        90
+      ],
+      [
+        0,
+        110
+      ],
+      [
+        110,
+        90
+      ]
+    ],
+    "scale": 3.0,
+    "leaf_offsets_mm": [
+      -20,
+      20
+    ]
+  },
+  "bin": {
+    "center_mm": [
+      190,
+      -90
+    ],
+    "inner_mm": [
+      90,
+      90,
+      50
+    ],
+    "wall_mm": 4
+  },
+  "leaf": {
+    "blade_mm": [
+      36,
+      12,
+      3
+    ],
+    "mass_g": 0.5
+  },
+  "seed": 42,
+  "world": {
+    "note": "Real-scale visual world for Unreal (metres), per the project operating concept: 5.7 m wide, 10 m long, 3.1 m tall pipe house; tea bushes 1.5-2.1 m; carriage on a ceiling rail with the Adeept arm hanging down.",
+    "greenhouse": {
+      "length": 10.0,
+      "width": 5.7,
+      "height": 3.1,
+      "eave": 1.55,
+      "arch_spacing": 0.9,
+      "pipe_r": 0.0125,
+      "x_min": -5.0
+    },
+    "rail": {
+      "z": 2.3,
+      "y": 0.0,
+      "gauge": 0.08,
+      "r": 0.012
+    },
+    "net": {
+      "side": 1,
+      "height": 1.5,
+      "color": [
+        0.04,
+        0.2,
+        0.55
+      ],
+      "opacity": 0.62
+    },
+    "rows_y": [
+      -1.5,
+      0.0,
+      1.5
+    ],
+    "bush_spacing": 0.95,
+    "outside": {
+      "inner": 4.2,
+      "outer": 22.0,
+      "count": 160
+    },
+    "ground_cover": {
+      "half_x": 8.0,
+      "half_y": 6.5,
+      "grass": 2600,
+      "weeds": 700,
+      "ferns": 260,
+      "litter": 6000
+    },
+    "hills": {
+      "radius": 70.0,
+      "depth": 40.0
+    }
+  }
+}

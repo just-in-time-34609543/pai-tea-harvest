@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>葉を1枚ずつ回収｜天井走行式 v5</title>
+<style>
+.controls{grid-row:1}
+:root{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;color:#e4ebe9;background:#111c23;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0}header{padding:24px 28px 18px;border-bottom:1px solid #2d3c43;display:flex;justify-content:space-between;gap:20px;align-items:center}
+h1{font-size:23px;margin:7px 0;font-weight:600;letter-spacing:.03em}.eyebrow{color:#80cfb9;font-size:11px;letter-spacing:.2em}header p{color:#a3b3b7;font-size:13px;margin:0;line-height:1.7}.version{border:1px solid #3f595f;padding:8px 13px;border-radius:20px;white-space:nowrap;font-size:12px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;max-width:1500px;margin:auto}#stage{height:500px;position:relative;min-width:0}canvas{display:block;touch-action:none}.stage-label{position:absolute;top:20px;left:24px;font-size:12px;color:#b1c6c9;pointer-events:none}.hint{position:absolute;bottom:15px;left:24px;font-size:12px;color:#a1b4b7;pointer-events:none}
+aside{padding:26px 24px;border-left:1px solid #2d3c43}aside h2{font-size:14px;font-weight:500;margin:0 0 20px}.phase{display:flex;gap:12px;align-items:center;padding:12px 0;color:#83999f;font-size:13px}.phase b{width:26px;height:26px;display:grid;place-items:center;border:1px solid #3f545b;border-radius:50%;font-weight:400;font-size:11px}.phase.active{color:#b8f5dd}.phase.active b{background:#2a6b56;color:#fff;border-color:#65c9a5}.phase.done{color:#a0b7b9}.specs{margin-top:24px;padding-top:16px;border-top:1px solid #2d3c43;font-size:12px;line-height:2;color:#afc2c3}.specs strong{color:#ebf4f0;font-weight:500}.note{font-size:12px;line-height:1.9;color:#adbdc1;margin-top:18px}
+.controls{grid-column:1/-1;border-top:1px solid #2d3c43;padding:20px 26px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}button,select{font:inherit;font-size:13px;border:1px solid #4a6065;border-radius:8px;background:#22373f;color:#e5f3ed;padding:10px 15px;cursor:pointer}button.primary{background:#b6efd8;color:#173a30;border:0;min-width:88px}input[type=range]{accent-color:#9bdfc3;flex:1;min-width:160px}label{font-size:12px;color:#afc2c3;display:flex;gap:7px;align-items:center}output{font-size:12px;font-variant-numeric:tabular-nums;min-width:85px}.footer{grid-column:1/-1;padding:0 26px 24px;font-size:12px;color:#9ab1b6;line-height:1.8}.footer a{color:#b4e9d5;margin-right:20px}#error{padding:20px;color:#ffc7a0;display:none}
+@media(max-width:780px){header{padding:18px;align-items:start}h1{font-size:19px}.version{display:none}main{display:block}#stage{height:440px}aside{border-left:0;border-top:1px solid #2d3c43;padding:18px}.phases{display:flex;gap:10px;flex-wrap:wrap}.phase{font-size:11px;gap:5px;padding:4px 0}.specs{margin-top:16px}.controls{padding:18px;gap:12px}.footer{padding:0 18px 20px}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+</head>
+<body>
+<header><div><div class="eyebrow">GREENHOUSE / ONE LEAF AT A TIME</div><h1>葉を1枚だけ、包んで回収。</h1><p>黄緑：摘む葉1枚　／　緑：残す葉と芽　／　天井走行・2関節アーム</p></div><span class="version">1枚ずつ · v5</span></header>
+<main>
+<div id="stage" role="img" aria-label="球状グリッパーが葉1枚だけを包み、他の葉と芽を残して箱へ運ぶ3D再生。"><div class="stage-label">葉1枚 / 天井走行</div><div class="hint">ドラッグ：回転　スクロール：拡大</div><div id="error" role="alert"></div></div>
+<aside><h2>動作の流れ <span id="progress"></span></h2><div id="plantProgress" style="font-size:12px;line-height:1.9;color:#b8f5dd"></div><div class="phases">
+<div class="phase" data-phase="approach"><b>1</b>次の葉へ移動・接近</div><div class="phase" data-phase="enclose"><b>2</b>その1枚だけを包む</div><div class="phase" data-phase="cut"><b>3</b>その葉の付け根を解除</div><div class="phase" data-phase="lift"><b>4</b>他の葉・芽・枝を残して上昇</div><div class="phase" data-phase="transfer"><b>5</b>1枚だけを箱へ運ぶ</div><div class="phase" data-phase="release"><b>6</b>開いて1枚を排出</div><div class="phase" data-phase="collect"><b>7</b>収納と空のグリッパーを確認</div><div class="phase" data-phase="return"><b>8</b>アームを畳んで次へ</div><div class="phase" data-phase="done"><b>✓</b>巡回完了</div></div>
+<div class="specs">模型 <strong>長さ50 × 幅25 × 高さ15 cm</strong><br>アーム <strong>肩・肘の2回転関節</strong><br>関節角 <strong id="angles">—</strong><br>台車の移動 <strong id="rail">—</strong><br>球殻の厚さ <strong id="wall">—</strong><br>底の茎用開口 <strong id="opening">—</strong></div>
+<p class="note">1回に葉1枚＋短い葉柄だけ。芽や複数の葉を束ねて取りません。この表示は単発モードです。天井走行と2関節は維持。実切断・AI認識は未実装です。</p></aside>
+<div class="controls"><button id="play" class="primary" type="button">再生</button><label for="timeline">時刻</label><input id="timeline" type="range" min="0" max="250" value="0" aria-label="再生位置"><output id="time">0.00 / 10 s</output><label><input id="transparent" type="checkbox" checked>内部を見る</label><button id="closeView" type="button">葉を拡大</button><button id="resetView" type="button">ハウス全体</button></div>
+<div class="footer"><a href="step/greenhouse_assembly.step" download>ハウス全体 STEP</a><a href="step/arm_assembly.step" download>吊り下げアーム STEP</a><a href="step/cage_assembly.step" download>グリッパー STEP</a><a href="cage-design.zip" download>CAD・STL・シミュレーション一式</a><br><span id="testNote">この再生は通常位置の成功例。10条件中9条件で箱内の静止まで確認し、1条件は揺れが残り未合格です。</span><br>実機製作前の形状試作です。透明カバーは表示のみ。荷重・印刷公差・サーボ連結部は未検証です。</div>
+</main>
+<script>window.addEventListener('error',e=>{const el=document.getElementById('error');el.style.display='block';el.textContent='表示を読み込めませんでした。ネット接続とWebGLを確認してください。 '+e.message});</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const geometryData = __GEOMETRY__;
+const trajectory = __TRAJECTORY__;
+const cfg=geometryData.config;
+const patrol=trajectory.mode==='patrol';
+if(patrol){document.title='同じ株の葉を1枚ずつ回収｜v7';document.querySelector('h1').textContent='同じ株の葉を、1枚ずつ。';document.querySelector('.version').textContent=cfg.patrol.plant_centers_mm.length+'株 × '+cfg.patrol.leaf_offsets_mm.length+'枚 · v7';document.querySelector('.note').textContent='同じ株の対象葉を1枚ずつ箱へ運び、すべて回収してから次の株へ。枝・古葉・芽は残します。各回、収納と空のグリッパーを確認。対象位置は既知で、AI認識や実センサーではありません。';document.getElementById('testNote').textContent='連続した物理計算の記録です。箱内で1秒間の滞在を確認して次へ進みます。完全静止とは別判定で、旧1枚試験の未合格条件は実験記録に残しています。';}
+document.getElementById('wall').textContent=cfg.wall_mm+' mm';
+document.getElementById('opening').textContent='約'+(2*cfg.radius_mm*Math.sin(cfg.bottom_angle_deg*Math.PI/180)).toFixed(1)+' mm';
+document.querySelector('.stage-label').textContent='50 × 25 × 15 cm / 天井走行 / リンク '+cfg.arm.links_mm.join(' + ')+' mm';
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0x111c23);stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.add(new THREE.HemisphereLight(0xe1f3ed,0x28353a,2.8));
+const key=new THREE.DirectionalLight(0xffffff,3);key.position.set(-.3,-.5,1);scene.add(key);
+const camera=new THREE.PerspectiveCamera(40,1,.001,10);camera.up.set(0,0,1);
+const orbit=new OrbitControls(camera,renderer.domElement);orbit.enableDamping=true;orbit.minDistance=.15;orbit.maxDistance=1.5;
+function resetView(){camera.position.set(.40,-.57,.34);orbit.target.set(.095,0,.070);orbit.update()}resetView();
+const grid=new THREE.GridHelper(.7,28,0x39545b,0x22373e);grid.rotation.x=Math.PI/2;scene.add(grid);
+function material(color,opacity=1){return new THREE.MeshStandardMaterial({color,roughness:.46,metalness:.13,transparent:opacity<1,opacity,side:THREE.DoubleSide,depthWrite:opacity===1})}
+const cageMat=material(0x53c8aa,.43),baseMat=material(0x8babb3),bladeMat=material(0xf3b86f),leafMat=material(0xa8cf3e),stemMat=material(0x557135);
+function meshFromData(d,mat){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(d.vertices.flat().map(x=>x*.001),3));g.setIndex(d.faces.flat());g.computeVertexNormals();return new THREE.Mesh(g,mat)}
+function box(size,pos,mat,parent=scene){const o=new THREE.Mesh(new THREE.BoxGeometry(...size),mat);o.position.set(...pos);parent.add(o);return o}
+function capsule(radius,length,pos,mat,parent=scene){const o=new THREE.Mesh(new THREE.CapsuleGeometry(radius,length,6,16),mat);o.rotation.x=Math.PI/2;o.position.set(...pos);parent.add(o);return o}
+const objects={};for(const b of trajectory.bodies){objects[b]=new THREE.Group();scene.add(objects[b])}
+objects.carrier.add(meshFromData(geometryData.base,baseMat));
+for(let i=0;i<geometryData.config.petals;i++){const o=meshFromData(geometryData.petal,cageMat);objects['petal_'+i].add(o)}
+for(let i=0;i<2;i++)box([.02,.006,.002].map(x=>x*cfg.radius_mm/50),[0,0,0],bladeMat,objects['blade_'+i]);
+function plantPrimitive(d,parent){
+ const mat=material(new THREE.Color(...d.rgba.slice(0,3)),d.rgba[3]);let o;
+ if(d.type==='capsule'){
+  const a=new THREE.Vector3(...d.fromto.slice(0,3)),b=new THREE.Vector3(...d.fromto.slice(3));
+  o=new THREE.Mesh(new THREE.CapsuleGeometry(d.size[0],a.distanceTo(b),8,20),mat);
+  o.position.copy(a).add(b).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.sub(a).normalize());
+ }else if(d.type==='box'){
+  o=new THREE.Mesh(new THREE.BoxGeometry(...d.size.map(x=>2*x)),mat);o.position.set(...(d.pos||[0,0,0]));if(d.euler)o.rotation.set(...d.euler);
+ }else if(d.type==='cylinder'){
+  o=new THREE.Mesh(new THREE.CylinderGeometry(d.size[0],d.size[0],2*d.size[1],32).rotateX(Math.PI/2),mat);o.position.set(...(d.pos||[0,0,0]));if(d.euler)o.rotation.set(...d.euler);
+ }else{
+  o=new THREE.Mesh(new THREE.SphereGeometry(1,28,14),mat);o.scale.set(...d.size);o.position.set(...d.pos);if(d.euler)o.rotation.set(...d.euler);
+ }parent.add(o);
+}
+for(const name of patrol?trajectory.leaf_bodies:['shoot'])for(const d of geometryData.shoot_geoms)plantPrimitive(d,objects[name]);
+for(const name of patrol?trajectory.bodies.filter(n=>n.startsWith('plant')):['protected_plant'])for(const d of patrol?geometryData.plant_geoms[name]:geometryData.protected_geoms)plantPrimitive(d,objects[name]);
+if(patrol){
+ document.getElementById('closeView').textContent='対象の株を拡大';
+ cfg.patrol.plant_centers_mm.forEach((x,p)=>{
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=96;
+  const context=canvas.getContext('2d');context.fillStyle='#b8f5dd';context.font='bold 44px sans-serif';context.textAlign='center';context.fillText('株 '+(p+1),128,60);
+  const label=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas),depthTest:false}));label.position.set(x*.001,-.025,.008);label.scale.set(.035,.013,1);scene.add(label);
+ });
+}
+for(const [name,geoms] of Object.entries(geometryData.arm_geoms))for(const d of geoms)plantPrimitive(d,objects[name]);
+for(const d of geometryData.bin_geoms)plantPrimitive(d,scene);
+for(const d of geometryData.greenhouse_geoms)plantPrimitive(d,scene);
+// Translucent roof is visual only; frame collision uses shared MJCF primitives.
+const roof=new THREE.BufferGeometry(),rv=[],ri=[],gh=cfg.greenhouse;
+for(let i=0;i<=32;i++){const t=i*Math.PI/32;for(const x of [gh.x_min_mm,gh.x_min_mm+gh.length_mm])rv.push(x*.001,gh.width_mm*.0005*Math.cos(t),(gh.eave_mm+(gh.height_mm-gh.eave_mm)*Math.sin(t))*.001)}
+for(let i=0;i<32;i++){const k=i*2;ri.push(k,k+1,k+2,k+1,k+3,k+2)}
+roof.setAttribute('position',new THREE.Float32BufferAttribute(rv,3));roof.setIndex(ri);roof.computeVertexNormals();scene.add(new THREE.Mesh(roof,material(0xb9ddd6,.055)));
+for(const s of [-1,1])box([gh.length_mm*.001,.0003,gh.eave_mm*.001],[(gh.x_min_mm+gh.length_mm/2)*.001,s*gh.width_mm*.0005,gh.eave_mm*.0005],material(0xb9ddd6,.04));
+const link=new THREE.Mesh(new THREE.TorusGeometry(.004,.00045,8,24),new THREE.MeshBasicMaterial({color:0xffb46a}));link.position.set(...geometryData.cut_point_m);scene.add(link);
+const timeline=document.getElementById('timeline'),timeLabel=document.getElementById('time'),play=document.getElementById('play');timeline.max=trajectory.frames.length-1;
+let playing=false,index=0,last=0,elapsed=0;const states=[...document.querySelectorAll('[data-phase]')];
+function applyFrame(i){const f=trajectory.frames[i];trajectory.bodies.forEach((b,k)=>{const p=f.poses[k];objects[b].position.set(p[0],p[1],p[2]);objects[b].quaternion.set(p[4],p[5],p[6],p[3])});link.visible=!f.cut;if(patrol){link.position.x=trajectory.stations_mm[f.target_index]*.001;document.getElementById('progress').textContent='｜回収 '+f.collected+' / '+trajectory.leaf_bodies.length+' 枚'+(f.aborted?'・停止':'');const target=trajectory.targets[f.target_index];document.getElementById('plantProgress').textContent=f.collected_per_plant.map((n,p)=>'株'+(p+1)+'：'+n+'/'+cfg.patrol.leaf_offsets_mm.length+'枚').join('　')+(f.phase==='done'?'　全株完了':'　対象：株'+(target.plant+1)+'の'+(target.leaf_on_plant+1)+'枚目');}timeline.value=i;document.getElementById('rail').textContent=f.rail_mm.toFixed(1)+' mm';document.getElementById('angles').textContent='肩 '+f.arm_deg[0].toFixed(1)+'° / 肘 '+f.arm_deg[1].toFixed(1)+'°';timeLabel.textContent=f.t.toFixed(2)+' / '+trajectory.frames.at(-1).t.toFixed(0)+' s';const active=states.findIndex(x=>x.dataset.phase===f.phase);states.forEach((e,j)=>{e.classList.toggle('active',j===active);e.classList.toggle('done',j<active)})}
+play.addEventListener('click',()=>{if(index>=trajectory.frames.length-1){index=0;elapsed=0}playing=!playing;play.textContent=playing?'一時停止':'再生'});
+timeline.addEventListener('input',()=>{index=Number(timeline.value);elapsed=trajectory.frames[index].t;playing=false;play.textContent='再生';applyFrame(index)});
+document.getElementById('transparent').addEventListener('change',e=>{cageMat.opacity=e.target.checked?.43:1;cageMat.transparent=e.target.checked;cageMat.depthWrite=!e.target.checked;cageMat.needsUpdate=true});
+document.getElementById('resetView').addEventListener('click',resetView);
+document.getElementById('closeView').addEventListener('click',()=>{const target=patrol?trajectory.targets[trajectory.frames[index].target_index]:null;const name=patrol?'plant'+target.plant+'_protected_plant':'shoot';const p=objects[name].position;camera.position.set(p.x+.06,p.y-.20,p.z+(patrol?.12:.05));orbit.target.copy(p).add(new THREE.Vector3(0,0,patrol?.055:.008));orbit.update()});
+new ResizeObserver(()=>{renderer.setSize(stage.clientWidth,stage.clientHeight);camera.aspect=stage.clientWidth/stage.clientHeight;camera.updateProjectionMatrix()}).observe(stage);
+applyFrame(0);
+function animate(ts){requestAnimationFrame(animate);const dt=last?Math.min((ts-last)/1000,.1):0;last=ts;if(playing){elapsed+=dt;while(index<trajectory.frames.length-1&&trajectory.frames[index+1].t<=elapsed)index++;applyFrame(index);if(index===trajectory.frames.length-1){playing=false;play.textContent='もう一度'}}orbit.update();renderer.render(scene,camera)}requestAnimationFrame(animate);
+</script></body></html>

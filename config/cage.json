@@ -1,0 +1,42 @@
+{
+  "revision": "v7-multiple-leaves-per-plant",
+  "patrol": {
+    "plant_centers_mm": [-40, 40, 120],
+    "leaf_offsets_mm": [-20, 20],
+    "bin_x_mm": 230,
+    "travel_angles_deg": [-8, 16],
+    "rail_limits_mm": [-60, 230],
+    "bin_dwell_s": 1,
+    "bin_timeout_s": 8
+  },
+  "harvest_unit": "one_leaf_with_short_petiole",
+  "duration_s": 12,
+  "plant_scale": 0.5,
+  "greenhouse": {
+    "length_mm": 500, "width_mm": 250, "height_mm": 150,
+    "x_min_mm": -150, "eave_mm": 60, "rail_height_mm": 143,
+    "carriage_travel_mm": 100, "lift_mm": 30
+  },
+  "arm": {
+    "base_mm": [-80, 0, 135],
+    "links_mm": [60, 60],
+    "mount_drop_mm": 20,
+    "pick_wrist_mm": [0, 0, 110],
+    "elbow_branch": 1,
+    "shoulder_limits_deg": [-170, -5],
+    "elbow_limits_deg": [5, 165]
+  },
+  "radius_mm": 15,
+  "wall_mm": 1.0,
+  "petals": 6,
+  "slot_angle_deg": 2,
+  "top_angle_deg": 25,
+  "bottom_angle_deg": 171,
+  "open_angle_deg": 55,
+  "hinge_bore_mm": 0.96,
+  "collision_rows": 22,
+  "collision_columns": 8,
+  "density_kg_m3": 1240,
+  "timestep_s": 0.001,
+  "seed": 42
+}

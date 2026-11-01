@@ -1,0 +1,147 @@
+"""Final course video (Unreal render): AI picks the instructed tea shoot from the fused point cloud, the arm harvests it.
+
+    python scripts/make_final_video.py --ckpt output/adeept/pcvla/ue_target/ckpt.pt --port 5600 --out output/adeept/final_video.mp4
+
+Needs a render server started with TEA_CAMS="cine,camera1,camera2,camera3,camera4,camera5" (cine = 1280x720 overview).
+Layout (1280x720): orbiting overview | arch camera | wrist camera | point cloud with the AI's predicted grasp point,
+captions in Japanese. Real time (10 fps simulation, 10 fps video); the title and ending cards are stills.
+"""
+import argparse
+import math
+import os
+import sys
+from pathlib import Path
+
+import imageio.v2 as imageio
+import numpy as np
+import torch
+from PIL import Image, ImageDraw, ImageFont
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "pcvla"))
+import harvest_env as H  # noqa: E402
+import pointcloud as PC  # noqa: E402
+import train as T  # noqa: E402
+from make_tea_demos import platform_origin  # noqa: E402
+from target_net import TargetNet, CROP  # noqa: E402
+from ue_render_client import UERenderClient  # noqa: E402
+
+FONT = os.environ.get("TEA_FONT") or os.path.join(os.environ.get("UE_ROOT", "UE_5.7.4"), "Engine/Content/Slate/Fonts/DroidSansFallback.ttf")  # 日本語フォント（Unreal Engine に入っているもの）
+JA = {"harvest": "新芽を1本摘んで、かごに入れて", "harvest_left": "左の新芽を摘んで、かごに入れて",
+      "harvest_middle": "真ん中の新芽を摘んで、かごに入れて", "harvest_right": "右の新芽を摘んで、かごに入れて"}
+PHASES = ["新芽の上へ接近", "新芽を包むように下降", "グリッパーを閉じて保持", "引き上げて株から外す", "かごの上へ移動", "グリッパーを開いて回収"]
+
+
+def font(sz):
+    return ImageFont.truetype(FONT, sz)
+
+
+def card(lines, sizes, w=1280, h=720, bg=(16, 28, 16)):
+    im = Image.new("RGB", (w, h), bg); d = ImageDraw.Draw(im)
+    y = h // 2 - sum(s + 18 for s in sizes) // 2
+    for text, sz in zip(lines, sizes):
+        f = font(sz); tw = d.textlength(text, font=f)
+        d.text(((w - tw) / 2, y), text, font=f, fill=(235, 240, 225)); y += sz + 18
+    return np.array(im)
+
+
+def cloud_panel(cloud, pred, truth, size=(400, 270)):
+    """Dense top view of the fused cloud, zoomed to the shoot/basket region, dark background, AI grasp point marked."""
+    w, h = size; top = 26
+    im = Image.new("RGB", size, (24, 26, 24)); d = ImageDraw.Draw(im)
+    x0, x1, y0, y1 = -0.04, 0.26, -0.20, 0.24                      # platform frame (m)
+    s = min((h - top - 6) / (x1 - x0), (w - 8) / (y1 - y0))
+    ox = (w - (y1 - y0) * s) / 2
+    xy = lambda p: (ox + (p[1] - y0) * s, top + (x1 - p[0]) * s)
+    for p in cloud[np.argsort(cloud[:, 2])]:
+        if not (x0 <= p[0] <= x1 and y0 <= p[1] <= y1):
+            continue
+        x, y = xy(p); d.rectangle([x - 1.5, y - 1.5, x + 1.5, y + 1.5], fill=tuple(int(255 * min(1, c * 1.15)) for c in p[3:6]))
+    x, y = xy(pred)
+    d.ellipse([x - 11, y - 11, x + 11, y + 11], outline=(255, 60, 60), width=3)
+    d.line([x - 16, y, x + 16, y], fill=(255, 60, 60), width=1); d.line([x, y - 16, x, y + 16], fill=(255, 60, 60), width=1)
+    d.text((6, 4), "点群（上から）と AIの推定把持点 ○", font=font(16), fill=(235, 235, 225))
+    return np.array(im)
+
+
+ORBIT_DEG_PER_S = float(os.environ.get("TEA_ORBIT_DEG_PER_S", "0"))
+
+
+def cine_pose(origin, t):
+    """Overview camera: fixed (default) or a slow orbit (TEA_ORBIT_DEG_PER_S), front-left of the platform, looking at the shoots and basket."""
+    a = math.radians(-50 - 35 + ORBIT_DEG_PER_S * t) if ORBIT_DEG_PER_S else math.radians(-50)
+    tgt = origin + np.array([0.10, 0.04, 0.03])
+    eye = tgt + np.array([0.85 * math.cos(a), 0.85 * math.sin(a), 0.42])
+    f = tgt - eye; f /= np.linalg.norm(f)
+    r = np.cross(f, [0, 0, 1.0]); r /= np.linalg.norm(r); u = np.cross(r, f)
+    return [*eye, *f, *u, 55.0]
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--ckpt", default="output/adeept/pcvla/ue_target/ckpt.pt")
+    p.add_argument("--port", type=int, default=5600)
+    p.add_argument("--out", default="output/adeept/final_video.mp4")
+    p.add_argument("--seeds", default="100003,100001,100002,100004")
+    a = p.parse_args()
+    T.CROP = np.array([float(v) for v in CROP.split(",")]).reshape(3, 2)
+    lang = torch.load(Path(__file__).resolve().parents[1] / "output" / "adeept" / "pcvla" / "lang.pt")
+    net = TargetNet().cuda().eval(); net.load_state_dict(torch.load(a.ckpt, map_location="cpu")["model"])
+    env = H.HarvestEnv(renderer="none", size=(240, 320))
+    frames = [card(["点群AIによる茶の新芽の選択摘採", "Physical AI応用1 最終課題（シミュレーション）",
+                    "ビニールハウスの骨に付けた4台のRGB-Dカメラ＋手首カメラ → 点群 → 指示された新芽をAIが特定 → アームで摘んで回収"],
+                   [44, 26, 20])] * 30
+    results = []
+    for task, seed in zip(H.TASKS, map(int, a.seeds.split(","))):
+        origin = platform_origin(np.random.default_rng(seed)); env.origin = np.asarray(origin)
+        ue = UERenderClient(origin=origin, port=a.port, depth=True); env.ue = ue
+        env.reset(seed, task=task)
+        r = np.random.default_rng(seed)
+        cloud = ue.cloud(env, r)
+        with torch.no_grad():
+            pred = net(torch.from_numpy(T.crop_resample(cloud, r))[None].float().cuda(), lang[env.language][None].float().cuda())[0].cpu().numpy()
+        chosen = int(np.argmin([np.linalg.norm(pred - s) for s in env.spots]))
+        if H.TASKS[task].target == "any":
+            env.target = chosen
+        err = float(np.linalg.norm(pred - env.spots[env.target]))
+        env.spots = list(env.spots); env.spots[env.target] = pred.astype(float)
+        ex = H.Expert(env); done, success, k = False, False, 0
+        cp = cloud_panel(ue.cloud(env, r, n=16000), pred, env.spots[env.target])
+        while not done:
+            bodies, cams = ue.poses(env)
+            for c in cams.values():
+                c[9] = float(np.degrees(2 * np.arctan(np.tan(np.radians(c[9]) / 2) * 320 / 240)))
+            cams["cine"] = cine_pose(np.asarray(origin), k / 10)
+            files = ue._request({"bodies": bodies, "cams": {n: cams[n] for n in ("cine", "camera1", "camera2")}, "out": f"{ue.dir}/v{k:05d}"})["files"]
+            im = {n: imageio.imread(f)[..., :3] for n, f in files.items()}
+            for f in files.values():
+                os.remove(f)
+            canvas = Image.new("RGB", (1280, 720), (12, 18, 12))
+            canvas.paste(Image.fromarray(im["cine"]).resize((880, 495)), (0, 0))
+            canvas.paste(Image.fromarray(im["camera1"]).resize((400, 225)), (880, 0))
+            canvas.paste(Image.fromarray(im["camera2"]).resize((400, 225)), (880, 225))
+            canvas.paste(Image.fromarray(cp), (880, 450))
+            d = ImageDraw.Draw(canvas)
+            d.text((888, 4), "アーチ上のカメラ", font=font(16), fill=(255, 255, 255))
+            d.text((888, 229), "手首カメラ", font=font(16), fill=(255, 255, 255))
+            d.text((16, 505), f"指示：「{JA[task]}」", font=font(30), fill=(240, 240, 220))
+            d.text((16, 552), f"AI：点群と指示文から目標の新芽を特定（推定誤差 {err * 1000:.1f} mm）", font=font(22), fill=(200, 230, 200))
+            phase = PHASES[min(ex.index, len(PHASES) - 1)] if ex.index < len(ex.plan) else "回収完了"
+            d.text((16, 592), f"動作：{phase}", font=font(22), fill=(220, 220, 200))
+            d.text((16, 676), f"t = {env.ticks / 10:4.1f} s（実時間）   MuJoCo物理 + Unreal Engine 5.7描画", font=font(16), fill=(160, 170, 160))
+            frames.append(np.array(canvas))
+            _, success, done = env.step(ex.act()); k += 1
+        ue.close()
+        results.append((task, success, err))
+        res = "成功：新芽をかごに回収、他の新芽は株に残っています" if success else "失敗"
+        frames += [np.array(Image.fromarray(frames[-1]).point(lambda v: v * 0.55))] * 1
+        last = Image.fromarray(frames[-1]); ImageDraw.Draw(last).text((16, 630), res, font=font(28), fill=(255, 230, 120))
+        frames += [np.array(last)] * 15
+    summary = [f"{JA[t]}：{'成功' if s else '失敗'}（推定誤差 {e * 1000:.1f} mm）" for t, s, e in results]
+    frames += [card(["結果（この動画の4試行）"] + summary + ["評価（保留シード各10試行）の成功率はレポートを参照"], [36] + [22] * len(summary) + [18])] * 40
+    imageio.mimsave(a.out, frames, fps=10, quality=8)
+    print("video", a.out, len(frames) / 10, "s", results)
+
+
+if __name__ == "__main__":
+    main()
