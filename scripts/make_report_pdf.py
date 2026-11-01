@@ -53,13 +53,13 @@ def fig_system():
 
 def fig_results():
     names = [("ue_mj_target", "新芽位置推定＋IK\n（Unreal＋MuJoCo学習）"), ("ue_target_from_mj", "新芽位置推定＋IK\n（MuJoCo学習→Unreal）"),
-             ("ue_target", "新芽位置推定＋IK\n（Unrealのみ学習）"), ("ue_pcvla_v4", "点群VLA\n（エンドツーエンド）")]
+             ("ue_target", "新芽位置推定＋IK\n（Unrealのみ学習）"), ("ue_pcvla_v4", "点群VLA\n（Unrealのみ学習）"), ("ue_mj_pcvla", "点群VLA\n（Unreal＋MuJoCo学習）")]
     fig, ax = plt.subplots(figsize=(10, 3.6))
     labels = ["任意", "左", "真ん中", "右"]
-    w = 0.2
+    w = 0.16
     for k, (n, lab) in enumerate(names):
         r, m = rates(n)
-        ax.bar([i + (k - 1.5) * w for i in range(4)], r, w, label=f"{lab.replace(chr(10), ' ')}  平均{m:.1f}%")
+        ax.bar([i + (k - 2) * w for i in range(4)], r, w, label=f"{lab.replace(chr(10), ' ')}  平均{m:.1f}%")
     ax.set_xticks(range(4)); ax.set_xticklabels(labels); ax.set_ylim(0, 105); ax.set_ylabel("成功率（%）")
     ax.set_title("Unreal描画での成功率（指示ごと、保留シード各10試行）"); ax.legend(fontsize=8, loc="lower right"); ax.grid(axis="y", alpha=.3)
     fig.savefig(FIG / "fig_results.png", dpi=150, bbox_inches="tight"); plt.close(fig)
@@ -116,7 +116,7 @@ def main():
     add("5. 結果", H2)
     img("fig_results.png", 170 * mm)
     add("図4　Unreal描画での成功率。新芽位置推定＋IK（Unreal＋MuJoCo学習）が平均97.5%（推定誤差の中央値1.5〜2.5mm）、点群VLAは75%。", st(9))
-    add("MuJoCo描画（茶樹の簡素版）では、新芽位置推定＋IKが97.5%、点群VLA（関節状態なし）75%、点群VLA（関節状態あり）15%、SmolVLA 5%。簡素なMuJoCo画面で学習した位置推定AIは、写実的なUnreal画面でもそのまま95%で動いた。")
+    add("MuJoCo描画（茶樹の簡素版）では、新芽位置推定＋IKが97.5%、点群VLA（関節状態なし）75%、点群VLA（関節状態あり）15%、SmolVLA 5%。簡素なMuJoCo画面で学習した位置推定AIは、写実的なUnreal画面でもそのまま95%で動いた。点群VLAは、MuJoCoのデータを加えても伸びなかった（75%→70%。各10試行の差で、誤差の範囲）。")
     img("fig_video_frame.jpg", 160 * mm)
     add("図5　動画の一場面（左の新芽を摘んでかごへ入れたところ）。全景、アーチ上のカメラ、手首カメラ、点群とAIの推定把持点（赤丸）。", st(9))
     add("6. 工夫した点と、前の版から発展させた点", H2)
