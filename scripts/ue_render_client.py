@@ -35,8 +35,6 @@ class UERenderClient:
         bodies = {}
         for b in range(m.nbody):
             name = m.body(b).name if b else "platform"
-            if name.startswith("fixture"):
-                continue
             bodies[name] = [*(d.xpos[b] + self.origin), *d.xquat[b]] if b else [*self.origin, 1, 0, 0, 0]
         cams = {}
         for c in range(m.ncam):

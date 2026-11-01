@@ -1,17 +1,19 @@
 # 球殻型・選択摘採グリッパー
 
+**最終課題は下の adeept-urlab ブランチ（点群AIによる茶の成葉の選択摘採）です。** 以下のv7は途中段階の試作です。
+
 Physical AI応用1 最終課題に向けた、葉を1枚ずつ包んで切り離し、球の中に保持して回収するロボットの試作です。
 
 現在は **v7：同じ株の複数の葉を、1枚ずつ回収** です。検証配置は3株×各2枚、計6枚。同じ幹から分かれた2枚の対象葉をそれぞれ箱へ運び終えてから次の株へ進みます。50×25×15cmハウスの天井レール・吊り下げ2関節アームで、左から右へ順番に回ります。各回、箱内滞在と空のグリッパーを確認し、古葉・芽・母枝は残します。対象位置は既知の計画巡回です。AI探索、実機、実切断、同期駆動機構は未実装で、最終課題完成版ではありません。
 
-## adeept-urlab ブランチ：点群AIによる新芽の選択摘採（Adeeptアーム＋Unreal Engine）
+## adeept-urlab ブランチ：点群AIによる茶の成葉の選択摘採（Adeeptアーム＋Unreal Engine）
 
-このブランチは、上記v7（球殻方式）とは別に、実運用構想の実寸パイプハウス（幅5.7m×長さ10m×高さ3.1m）で、天井レール台車から吊った台に載せたAdeept ADA031アームが、言葉で指定した茶の新芽を摘んでかごへ回収するシミュレーションである。物理はMuJoCo 3.17、描画はUnreal Engine 5.7（Lumen、画面なしVulkan）。
+このブランチは、上記v7（球殻方式）とは別に、実運用構想の実寸パイプハウス（幅5.7m×長さ10m×高さ3.1m）で、天井レール台車から吊った台に載せたAdeept ADA031アームが、言葉で指定した茶の成葉を1枚ずつ摘んでかごへ回収するシミュレーションである（葉柄と枝は株に残る）。物理はMuJoCo 3.17、描画はUnreal Engine 5.7（Lumen、画面なしVulkan）。
 
 - カメラ：ハウスのアーチ（骨）に4台のRGB-Dカメラ＋手首カメラ。深度から台座標の点群（2048点、xyz＋色）を統合。
-- AI：点群と指示文（任意／左／真ん中／右）から目標の新芽の3D把持点を推定（`scripts/pcvla/target_net.py`）。動作はアームの逆運動学で計画。比較として点群VLA（`scripts/pcvla/model.py`、エンドツーエンド）とSmolVLAも学習。
-- 結果（Unreal描画、保留シード各10試行）：新芽位置推定＋IK 97.5%、点群VLA 75%。詳細は `docs/report/report.md`、`docs/experiment-log.md`。
-- 動画：`docs/preview/final/final_video_fixed.mp4`（カメラ固定）、`final_video_slow_orbit.mp4`（ゆっくり回る視点）。約71秒、等速。
+- AI：点群と指示文（任意／左／真ん中／右の4種類で固定）から目標の成葉の3D把持点を推定（`scripts/pcvla/target_net.py`）。動作はAIの推定点だけを使ってアームの逆運動学で計画。
+- 結果（学習に使わない乱数シードで各指示10試行）：Unreal描画 92.5%、MuJoCo描画 95.0%。言い換えた指示では、Unreal＋MuJoCoで学習したモデルをMuJoCo描画で評価して 63.3%（同じ条件で元の文は 87.5%）で、言い換えには対応していない。詳細は `docs/report/report.md`、`docs/experiment-log.md`。
+- 動画：`docs/preview/final/final_video_leaf_fixed.mp4`（カメラ固定）、`final_video_leaf_slow.mp4`（ゆっくり回る視点）。約72秒、等速、1080p（プレビューは720p）。
 
 最小の実行手順（Linux、GPU、Unreal Engine 5.7とプロジェクトの準備は `docs/experiment-log.md` 参照）：
 

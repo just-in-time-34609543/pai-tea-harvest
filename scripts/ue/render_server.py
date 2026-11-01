@@ -100,10 +100,11 @@ for name, parts in bodies.items():
         metal = .6 if max(p["rgb"]) - min(p["rgb"]) < .08 and sum(p["rgb"]) < 1.6 else 0.
         acts.append(spawn(import_obj(os.path.join(MESHES, p["obj"])), color_instance(parent, p["rgb"], metal=metal), f"RB_{name}_{len(acts)}"))
     actors[name] = acts
-# simulated shoots: procedural shoot (bud cluster centred on the body origin) + long stem into the canopy
-mi = {k: unreal.load_asset(f"{GAME}/Materials/{n}") for k, n in (("young", "MI_ShootYoung"), ("bud", "MI_ShootBud"), ("twig", "MI_Twig"))}
-shoot_parts = [(import_obj(os.path.join(PLANTS, "shoot_young.obj")), mi["young"], -0.03), (import_obj(os.path.join(PLANTS, "shoot_bud.obj")), mi["bud"], -0.03),
-               (import_obj(os.path.join(PLANTS, "shoot_stem.obj")), mi["twig"], -0.03), (import_obj(os.path.join(MESHES, "shoot_long_stem.obj")), mi["twig"], 0.0)]
+# plucked leaves: part 0 (green leaf blade) follows the leaf body; parts 1-2 (petiole, twig) follow fixture<i>,
+# so they stay on the bush.
+mi = {k: unreal.load_asset(f"{GAME}/Materials/{n}") for k, n in (("leaf", "MI_LeafHealthy"), ("twig", "MI_Twig"))}
+shoot_parts = [(import_obj(os.path.join(PLANTS, "leaf_green.obj")), mi["leaf"], 0.0), (import_obj(os.path.join(PLANTS, "leaf_petiole.obj")), mi["twig"], 0.0),
+               (import_obj(os.path.join(MESHES, "shoot_long_stem.obj")), mi["twig"], -0.012)]
 shoot_offsets = {}
 for name in [n for n in bodies if n.startswith("shoot")]:
     actors[name] = []
@@ -144,8 +145,11 @@ log(f"listening on {PORT}")
 
 
 def apply(req):
-    for name, pose in req.get("bodies", {}).items():
+    bodies_req = req.get("bodies", {})
+    for name, pose in bodies_req.items():
         for k, a in enumerate(actors.get(name, [])):
+            if name.startswith("shoot") and k >= 1:
+                pose = bodies_req.get("fixture" + name[len("shoot"):], pose)
             loc = list(pose[:3])
             if (name, k) in shoot_offsets:
                 loc[2] += shoot_offsets[(name, k)]

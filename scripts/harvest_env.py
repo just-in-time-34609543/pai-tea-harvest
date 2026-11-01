@@ -1,9 +1,10 @@
 """Tea-shoot harvest task for the Adeept ADA031 arm (MuJoCo physics; images from MuJoCo or Unreal).
 
 The arm stands on a small platform hung from the ceiling-rail carriage (rail-suspended, not floor
-standing). Around the platform, young tea shoots stick up from the canopy below. A shoot is a free body held to
-the bush by a weld; the weld releases only once the gripper has closed on that shoot and lifted it (simulated
-plucking: no cutting, no plant damage modelled). The harvested shoot goes into the basket on the platform.
+standing). Around the platform, young tea shoots stick up from the canopy below. The tip of a shoot (bud and two young leaves) is a free body
+held to the bush by a weld; its stem belongs to the bush and stays there. The weld releases only once the gripper
+has closed on the tip and lifted it (simulated plucking: no cutting, no plant damage modelled). The plucked tip
+goes into the basket on the platform.
 
 The arm model, servo mapping, IK and expert motion come from the Adeept ADA031 simulator in
 adeept_sim/ (included in this repository). Set ADEEPT_SIM to use another copy.
@@ -59,8 +60,10 @@ def lookat_quat(pos, target):
     u = np.cross(r, f)
     q = np.zeros(4); mujoco.mju_mat2Quat(q, np.stack([r, u, -f], 1).flatten())
     return q
-GRASP_Z = 0.075            # grasp point (centre of the bud cluster) above the base plate, like the cork
-SHOOT_STEM = 0.20          # visible stem below the grasp point, down into the canopy
+GRASP_Z = 0.075            # grasp point (centre of the leaf blade) above the base plate
+SHOOT_STEM = 0.20          # visible twig below the leaf, down into the canopy (stays on the bush)
+LEAF_HALF = (0.010, 0.003, 0.016)   # collision box of the plucked leaf: half width (radial), half thickness, half length
+GRASP_DZ = -0.008                  # the fingers pinch the lower half of the blade (keeps the blade clear of the gripper)
 
 
 @dataclass
@@ -70,10 +73,10 @@ class HarvestTask:
 
 
 TASKS = {
-    "harvest": HarvestTask("harvest the young tea shoot and put it in the basket", "any"),
-    "harvest_left": HarvestTask("harvest the young tea shoot on the left and put it in the basket", "left"),
-    "harvest_middle": HarvestTask("harvest the young tea shoot in the middle and put it in the basket", "middle"),
-    "harvest_right": HarvestTask("harvest the young tea shoot on the right and put it in the basket", "right"),
+    "harvest": HarvestTask("pluck a green tea leaf and put it in the basket", "any"),
+    "harvest_left": HarvestTask("pluck the green tea leaf on the left and put it in the basket", "left"),
+    "harvest_middle": HarvestTask("pluck the green tea leaf in the middle and put it in the basket", "middle"),
+    "harvest_right": HarvestTask("pluck the green tea leaf on the right and put it in the basket", "right"),
 }
 
 
@@ -123,20 +126,26 @@ def build_xml():
             ET.SubElement(asset, "mesh", name=f"m_canopy_{part}", file=os.path.abspath(os.path.join(PLANTS, f"bush{CANOPY_VARIANT}_{part}.obj")), inertia="shell")
             ET.SubElement(canopy, "geom", type="mesh", mesh=f"m_canopy_{part}", material=mat, **vis)
     eq = root.find("equality") or ET.SubElement(root, "equality")
+    if os.path.exists(os.path.join(PLANTS, "leaf_green.obj")):
+        ET.SubElement(asset, "mesh", name="m_leaf_green", file=os.path.abspath(os.path.join(PLANTS, "leaf_green.obj")), inertia="shell")
+        ET.SubElement(asset, "mesh", name="m_leaf_petiole", file=os.path.abspath(os.path.join(PLANTS, "leaf_petiole.obj")), inertia="shell")
+    ET.SubElement(asset, "material", name="leaf_target", rgba=".20 .40 .11 1", specular=".5", shininess=".6")
     for i in range(N_SHOOTS):
+        # the plucked part: one green mature leaf blade standing up from the canopy, its plane radial (body x) and
+        # vertical (body z), so the two fingers close across its thickness (body y). Body frame yawed in reset().
         b = ET.SubElement(wb, "body", name=f"shoot{i}", pos=f"{1 + i} 3 0")
         ET.SubElement(b, "freejoint", name=f"shoot{i}_free")
-        # bud cluster (grasp target) centred on the body origin; stem below
-        ET.SubElement(b, "geom", name=f"bud{i}", type="capsule", fromto="0 0 -0.012 0 0 0.018", size="0.0065", rgba="0 0 0 0",
-                      mass="0.0015", condim="4", friction="1.5 0.02 0.001", contype="1", conaffinity="1")
-        ET.SubElement(b, "geom", name=f"stem{i}", type="capsule", fromto=f"0 0 -{SHOOT_STEM} 0 0 -0.012", size="0.0022",
+        fx = ET.SubElement(wb, "body", name=f"fixture{i}", pos=f"{1 + i} 3 0", mocap="true")
+        ET.SubElement(b, "geom", name=f"bud{i}", type="box", size=f"{LEAF_HALF[0]} {LEAF_HALF[1]} {LEAF_HALF[2]}", rgba="0 0 0 0",
+                      mass="0.002", condim="4", friction="1.5 0.02 0.001", contype="1", conaffinity="1")
+        if os.path.exists(os.path.join(PLANTS, "leaf_green.obj")):
+            ET.SubElement(b, "geom", type="mesh", mesh="m_leaf_green", material="leaf_target", contype="0", conaffinity="0", group="2", mass="0")
+            ET.SubElement(fx, "geom", type="mesh", mesh="m_leaf_petiole", material="shoot_stem", contype="0", conaffinity="0", group="2", mass="0")
+        else:
+            ET.SubElement(b, "geom", type="box", size=f"{LEAF_HALF[0]} 0.0008 {LEAF_HALF[2]}", material="leaf_target", contype="0", conaffinity="0", group="2", mass="0")
+        # the twig and petiole stay on the bush (fixture)
+        ET.SubElement(fx, "geom", name=f"stem{i}", type="capsule", fromto=f"0 0.003 -{SHOOT_STEM} 0 0.003 -{LEAF_HALF[2] + 0.012}", size="0.0022",
                       material="shoot_stem", mass="0.001", contype="0", conaffinity="0")
-        if os.path.exists(os.path.join(PLANTS, "shoot_young.obj")):
-            # the procedural shoot (two half-folded young leaves + closed bud) around the grasp capsule
-            for part, mat in (("young", "shoot_young"), ("bud", "shoot_bud"), ("stem", "shoot_stem")):
-                ET.SubElement(b, "geom", type="mesh", mesh=f"m_shoot_{part}", material=mat, pos="0 0 -0.03",
-                              contype="0", conaffinity="0", group="2", mass="0")
-        ET.SubElement(wb, "body", name=f"fixture{i}", pos=f"{1 + i} 3 0", mocap="true")
         ET.SubElement(eq, "weld", name=f"attach{i}", body1=f"shoot{i}", body2=f"fixture{i}", solref="0.004 1")
     return ET.tostring(root, encoding="unicode")
 
@@ -212,7 +221,9 @@ class HarvestEnv(adeept.AdeeptSimEnv):
         self.layout = {"left": int(order[0]), "middle": int(order[1]), "right": int(order[2])}
         self.target = int(self.rng.integers(N_SHOOTS)) if self.task.target == "any" else self.layout[self.task.target]
         for i, s in enumerate(spots):
-            quat = [1, 0, 0, 0]
+            yaw = math.atan2(s[1], s[0]) + self.rng.uniform(-0.15, 0.15)
+            quat = [math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
+            self.data.mocap_quat[self.fixture_mocap[i]] = quat
             adr = self.shoot_qpos[i]
             self.data.qpos[adr:adr + 7] = [*s, *quat]
             self.data.mocap_pos[self.fixture_mocap[i]] = s
@@ -303,7 +314,7 @@ class HarvestEnv(adeept.AdeeptSimEnv):
 
     # -- scripted expert --
     def expert_waypoints(self):
-        bud = self.spots[self.target].copy()
+        bud = self.spots[self.target].copy() + np.array([0, 0, GRASP_DZ])
         above = bud + [0, 0, 0.05]
         pre = self.grasp_pose(above, adeept.OPEN)
         grasp = None if pre is None else self.grasp_pose(bud, adeept.OPEN, near=pre)
@@ -325,6 +336,26 @@ class Expert(adeept.Expert):
         state = self.env.state
         if self.index >= len(self.plan):
             return state.copy()
+        if self.index == 3 and not hasattr(self, "grasp_off"):
+            # leaf offset from the TCP when the fingers have closed, from the leaf position the planner knows
+            # (env.spots[target]: the AI estimate at evaluation, the scripted target for demonstrations).
+            # truth_drop=True uses the simulator's leaf position instead (teacher variant, not used by default).
+            tcp, _ = self.env.fk(state)
+            leaf = self.env.shoot_pos(self.env.target) if getattr(self, "truth_drop", False) else np.asarray(self.env.spots[self.env.target])
+            self.grasp_off = leaf[:2] - tcp[:2]
+        if self.index == 4 and self.hold is None and not getattr(self, "aimed", False):
+            # the leaf hangs off-centre in the gripper: aim the drop by that offset, kept in the arm's heading frame
+            # because the base turns on the way to the basket
+            tcp, _ = self.env.fk(state)
+            turn = math.radians(90 + math.degrees(math.atan2(self.env.box_xy[1], self.env.box_xy[0])) - state[0])
+            c, s = math.cos(turn), math.sin(turn)
+            off = getattr(self, "grasp_off", np.zeros(2))
+            off = np.array([c * off[0] - s * off[1], s * off[0] + c * off[1]])
+            over = self.env.grasp_pose((*(self.env.box_xy - off), 0.09), adeept.CLOSED, near=state)
+            if over is not None:
+                release = over.copy(); release[4] = adeept.OPEN
+                self.plan[4], self.plan[5] = (over, self.plan[4][1]), (release, self.plan[5][1])
+            self.aimed = True
         goal, hold = self.plan[self.index]
         delta = goal - state
         if np.max(np.abs(delta)) < 0.5:

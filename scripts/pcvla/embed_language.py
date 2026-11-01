@@ -19,7 +19,7 @@ def main():
     proc = AutoProcessor.from_pretrained(VLM)
     model = AutoModelForImageTextToText.from_pretrained(VLM, torch_dtype=torch.float32).eval()
     text_model = model.model.text_model
-    out = {}
+    out = torch.load(OUT) if OUT.exists() else {}      # keep earlier instructions (older checkpoints use them)
     with torch.no_grad():
         for t in H.TASKS.values():
             ids = proc.tokenizer(t.language, return_tensors="pt")

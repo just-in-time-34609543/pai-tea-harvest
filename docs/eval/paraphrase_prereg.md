@@ -1,0 +1,25 @@
+# 言い換え指示での評価（事前登録、評価の前に固定）
+
+- 目的：位置推定AIは学習で固定の4文のみを見ている。言い換えた指示でも目標の成葉を選べるかを確かめる。
+- モデル：成葉版の最終の位置推定モデル（Unreal＋MuJoCoで学習、`output/adeept/pcvla/leaf_ue_mj_target`）。最終モデルができる前の試走は `output/adeept/pcvla/leaf_target`（MuJoCoのみ）で行い、最終モデルで改めて回す。学習には言い換えた文を一切使わない。
+- 埋め込み：評価時に `embed_language.py` と同じ方法（SmolVLM2-500M-Video-Instruct の text_model、最終層の平均プーリング）でその場で計算する。元の4文も同じ経路で計算し、`lang.pt` の値との一致を確認する。
+- seed：100000〜100009（各指示10回）。元の文と言い換えで同じseed。画面はMuJoCo描画（時間があればUnreal描画でも）。
+- 言い換え（固定。結果を見て増減・差し替えしない）
+  - 任意（元：pluck a green tea leaf and put it in the basket）
+    - pick one green tea leaf and drop it into the basket
+    - take any green leaf off the tea plant and place it in the basket
+    - harvest a single green tea leaf into the basket
+  - 左（元：pluck the green tea leaf on the left and put it in the basket）
+    - pick the green tea leaf on the left side and drop it into the basket
+    - take the leftmost green tea leaf and place it in the basket
+    - harvest the left green leaf into the basket
+  - 真ん中（元：pluck the green tea leaf in the middle and put it in the basket）
+    - pick the green tea leaf in the center and drop it into the basket
+    - take the central green tea leaf and place it in the basket
+    - harvest the middle green leaf into the basket
+  - 右（元：pluck the green tea leaf on the right and put it in the basket）
+    - pick the green tea leaf on the right side and drop it into the basket
+    - take the rightmost green tea leaf and place it in the basket
+    - harvest the right green leaf into the basket
+- 出力：指示ごと・言い換えごとの成功率、違う葉を摘んだ割合（左・真ん中・右）、推定誤差の中央値。CSV 2つ（列 `episode,score`、episode=`指示_seed`）：元の文40試行、言い換え120試行（同じseed・同じ指示の3文の平均を1行に）。
+- レポートへの書き方（結果によらず）：「言い換えた指示（各指示3文×10試行）での成功率はX%（元の文はY%）」。相対20%を超えて落ちた場合は「指示文は4種類に固定で、言い換えには対応していない」と明記。落ちなかった場合も「固定の4文で学習し、言い換えは評価だけ」と書く。
