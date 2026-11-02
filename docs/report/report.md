@@ -2,7 +2,7 @@
 
 Physical AI応用1 最終課題　説明資料（数値はすべてシミュレーションの結果で、実機・実茶樹での結果ではない） PDF版は `scripts/make_report_pdf.py` で作る（`docs/report/report.pdf`）。
 
-動画：https://www.youtube.com/watch?v=VDQOJV81o0A　コード：https://github.com/just-in-time-34609543/pai-tea-harvest
+動画：https://www.youtube.com/watch?v=ZV-F6PxgfTw　コード：https://github.com/just-in-time-34609543/pai-tea-harvest
 
 ## 1. 課題の概要と目的
 
